@@ -187,3 +187,118 @@ public static class NoBodySample
 		return GetCurrentProcessId();
 	}
 }
+
+public static class IlAnalysisPositiveSamples
+{
+	[NativeCompile]
+	public static int Add(int a, int b) => a + b;
+
+	[NativeCompile]
+	public static int Subtract(int a, int b) => a - b;
+
+	[NativeCompile]
+	public static int Multiply(int a, int b) => a * b;
+
+	[NativeCompile]
+	public static int LocalsMethod(int a, int b)
+	{
+		int x = a + 10;
+		int y = b * 2;
+		return x + y;
+	}
+
+	[NativeCompile]
+	public static int ReturnConstant() => 42;
+
+	[NativeCompile]
+	public static int ComplexArithmetic(int a, int b, int c)
+	{
+		return (a + b) * c - (a / 2) + (b % 3);
+	}
+
+	[NativeCompile]
+	public static int SimpleIfElse(int a, int b)
+	{
+		if (a > b)
+		{
+			return a - b;
+		}
+		else
+		{
+			return b - a;
+		}
+	}
+
+	[NativeCompile]
+	public static int SumLoop(int n)
+	{
+		int sum = 0;
+		for (int i = 0; i < n; i++)
+		{
+			sum += i;
+		}
+		return sum;
+	}
+
+	[NativeCompile]
+	public static int MultiBranchMerge(int a, int b)
+	{
+		int result;
+		if (a > 10)
+		{
+			result = 100;
+		}
+		else if (b > 5)
+		{
+			result = 50;
+		}
+		else
+		{
+			result = 0;
+		}
+		return result;
+	}
+
+	[NativeCompile]
+	public static void VoidMethod() { }
+}
+
+public static class IlAnalysisNegativeSamples
+{
+	[NativeCompile]
+	public static int TryCatchMethod(int a)
+	{
+		try
+		{
+			return a + 1;
+		}
+		catch
+		{
+			return 0;
+		}
+	}
+
+	[NativeCompile]
+	public static T GenericMethod<T>(T val) => val;
+
+	[NativeCompile]
+	public static double UnsupportedSignatureMethod(double x) => x + 1.0;
+}
+
+public class InstanceArgsSample
+{
+	[NativeCompile]
+	public long AddInstanceArgs(int a, long b)
+	{
+		return a + b;
+	}
+}
+
+public static class StaticArgsSample
+{
+	[NativeCompile]
+	public static long AddStaticArgs(int a, long b)
+	{
+		return a + b;
+	}
+}
