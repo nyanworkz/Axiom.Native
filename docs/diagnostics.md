@@ -5,6 +5,7 @@ Axiom.Native uses structured, deterministic diagnostic error codes to communicat
 Diagnostics are partitioned by subsystem:
 - **`AXM1001`–`AXM1007`**: Emitted during Dependency Resolution ([Milestone 2](compiler/dependencies.md)).
 - **`AXM2001`–`AXM2011`**: Emitted during IL Analysis & Stack Simulation ([Milestone 3](compiler/il-analysis.md)).
+- **`AXM3001`–`AXM3008`**: Emitted during LLVM IR Generation ([Milestone 4](compiler/llvm-ir-generation.md)).
 
 ---
 
@@ -40,20 +41,33 @@ Diagnostics are partitioned by subsystem:
 
 ---
 
-## 3. Diagnostic Severity and Support Hierarchy
+## 3. LLVM IR Generation Diagnostics (`AXM3001`–`AXM3008`)
 
-When a method is analyzed, the diagnostics dictate the resulting [`IlAnalysisSupportStatus`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler/sources/Analysis/IlAnalysisSupportStatus.cs):
+| Code | Severity | Description | Typical Cause | Recommended Action |
+|---|:---:|---|---|---|
+| **`AXM3001`** | Error | Method analysis result is not supported or contains errors. | Invoking `LlvmIrGenerator` on a method that failed IL Analysis or has unresolved metadata. | Ensure method passes `MethodIlAnalyzer.Analyze` before generating LLVM IR. |
+| **`AXM3002`** | Error | Method has no CFG or CFG has no basic blocks. | `MethodAnalysisResult.Cfg` is null or contains zero basic blocks. | Verify that the method has a non-empty IL body that produces a valid control-flow graph. |
+| **`AXM3003`** | Error | Unsupported type in signature or local variables. | Method uses complex types, reference types, or pointers not mappable to LLVM primitives. | Restrict types to supported integer and boolean primitives (`i1`, `i8`, `i16`, `i32`, `i64`). |
+| **`AXM3004`** | Error | Unsupported instruction during IR generation. | Encountered unhandled opcode or `this` pointer access during lowering. | Restrict methods to the supported primitive IL instruction subset. |
+| **`AXM3005`** | Error | Stack underflow or type mismatch during instruction lowering. | An instruction attempted to pop an operand from an empty stack during LLVM emission. | Compiler invariant failure; ensure IL Analysis passed without warnings. |
+| **`AXM3006`** | Error | Branch target cannot be resolved to a basic block. | Branch instruction points to an invalid instruction offset not matching any basic block start. | Verify CFG block boundaries and branch operands. |
+| **`AXM3007`** | Error | Predecessor stack value mismatch when building phi node. | Predecessor basic block exit stack does not contain an operand for an incoming phi slot. | Invariant violation; ensure all predecessor branches leave consistent stack heights. |
+| **`AXM3008`** | Error | Internal error during LLVM IR generation. | An unexpected exception occurred inside `LlvmIrGenerator.GenerateCore`. | Inspect exception message and method definition for abnormal bytecode structure. |
+
+---
+
+## 4. Diagnostic Severity and Support Hierarchy
+
+When a method is analyzed, the diagnostics dictate the resulting status:
 
 ```mermaid
 stateDiagram-v2
     [*] --> Supported: All checks pass
     [*] --> Unsupported: Contains unsupported constructs (AXM2001, AXM2002, AXM2003, AXM2011)
     [*] --> MalformedIl: Violates CIL semantics or stack invariants (AXM2004-AXM2010)
-
-    Unsupported --> MalformedIl: Overridden by MalformedIl
+    Supported --> LlvmIrSuccess: LlvmIrGenerator passes
+    Supported --> LlvmIrError: LlvmIrGenerator emits AXM3001-AXM3008
 ```
 
-- **`MalformedIl`** has the highest priority. If an instruction breaks evaluation stack consistency or branch bounds, the method is marked `MalformedIl` regardless of whether unsupported instructions are also present.
-- **`Unsupported`** indicates valid IL that cannot yet be compiled by Axiom.Native due to subset restrictions.
-- **`Supported`** indicates the method passed all validations and is ready for native lowering.
-
+- **`AXM3001`–`AXM3008`** prevent LLVM IR output (`LlvmIrGenerationResult.IsSuccess == false`, `LlvmIr == null`).
+- Generation is deterministic and non-throwing; all expected failures produce structured diagnostic objects.

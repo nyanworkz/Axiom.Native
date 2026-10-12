@@ -17,7 +17,8 @@ projects/
     └── sources/
         ├── NativeAssemblyLoaderTests.cs      # Milestone 1: 9 tests
         ├── MethodDependencyResolverTests.cs  # Milestone 2: 11 tests
-        └── MethodIlAnalyzerTests.cs          # Milestone 3: 30 tests
+        ├── MethodIlAnalyzerTests.cs          # Milestone 3: 30 tests
+        └── LlvmIrGeneratorTests.cs           # Milestone 4: 23 tests
 ```
 
 ### Why a Dedicated `TestAssembly`?
@@ -33,17 +34,30 @@ Testing metadata and IL analysis on synthetic Cecil objects alone can introduce 
 
 ## 2. Test Coverage Matrix
 
-As of Milestone 3, the test suite contains **50 tests** with 100% pass rate:
+As of Milestone 4, the test suite contains **73 tests** with 100% pass rate:
 
 | Test Class | Milestone | Tests Count | Scope & Focus Areas |
 |---|:---:|:---:|---|
 | [`NativeAssemblyLoaderTests`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler.Tests/sources/NativeAssemblyLoaderTests.cs) | Discovery | 9 | - Loading from file path and memory stream.<br/>- Immediate reading mode without file locking.<br/>- Root discovery of static and instance methods.<br/>- Struct-level attribution and method inheritance.<br/>- Method-level `OptimizeFor` override over struct defaults.<br/>- Deep recursion across nested types.<br/>- Proper exclusion of unattributed methods. |
 | [`MethodDependencyResolverTests`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler.Tests/sources/MethodDependencyResolverTests.cs) | Dependencies | 11 | - Direct invocation tracking (`call`).<br/>- Virtual and interface invocation detection (`callvirt` $\to$ `AXM1007`).<br/>- Recursive call handling and cycle termination.<br/>- Deduplication of visited nodes.<br/>- Identification of foreign BCL assembly boundaries.<br/>- Detection of generic methods and generic declaring types (`AXM1006`).<br/>- Non-existent or abstract method detection. |
 | [`MethodIlAnalyzerTests`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler.Tests/sources/MethodIlAnalyzerTests.cs) | IL Analysis | 30 | - **Positive verification**: Basic integer arithmetic, loops, bitwise logic, conversions, unary negation, signed/unsigned divisions and comparisons, void return.<br/>- **Malformed IL**: Stack underflow (`AXM2004`), operand type mismatch (`AXM2005`), merge point mismatch (`AXM2006`), invalid branch target (`AXM2007`), invalid return stack (`AXM2008`), out-of-bounds arg/local index (`AXM2009`), missing body (`AXM2010`).<br/>- **Unsupported IL**: Floating-point (`AXM2002`), reference types (`AXM2002`), `this` access (`AXM2002`), exception handling (`AXM2003`), `starg` mutation (`AXM2001`), in-method calls (`AXM2011`). |
+| [`LlvmIrGeneratorTests`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler.Tests/sources/LlvmIrGeneratorTests.cs) | LLVM IR Generation | 23 | - **Positive lowering**: Constant-returning methods, I4 and I8 arguments, local variable allocation and load/store, complex arithmetic, signed/unsigned division and remainder, bitwise logic, masked shift operations, conversions (`sext`/`zext`/`trunc`), comparisons (`icmp`), conditional branches, loops, multi-predecessor stack merge (`phi` nodes), multiple return paths, void returns.<br/>- **Diagnostics & Error Handling**: Invalid or unsupported input analysis results (`AXM3001`), missing CFG (`AXM3002`), unsupported parameter/return types (`AXM3003`), unsupported instructions (`AXM3004`), evaluation stack underflow during emission (`AXM3005`), diagnostic properties & equality.<br/>- **Determinism**: Identical inputs emit identical LLVM IR string.<br/>- **Compiler Facade**: `NativeCompiler.GenerateLlvmIr` delegation. |
 
 ---
 
-## 3. Running Tests
+## 3. LLVM Verifier Integration (`opt -passes=verify`)
+
+Whenever an official LLVM toolchain is detected in the execution environment (e.g., LLVM 18.1.8 `opt.exe` in PATH or tool directories), [`LlvmIrGeneratorTests`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler.Tests/sources/LlvmIrGeneratorTests.cs) pipes the emitted LLVM IR text into `opt -passes=verify`:
+
+- Validates basic block terminator structure.
+- Verifies that SSA registers are defined before use and dominance rules hold.
+- Verifies `phi` node incoming predecessor labels and types.
+- Verifies function parameter counts and return types.
+- Asserts that `opt` exits with code `0`.
+
+---
+
+## 4. Running Tests
 
 ### Standard Test Execution
 Run all tests across the solution:
@@ -62,15 +76,14 @@ dotnet test projects/Axiom.Native.Compiler.Tests/Axiom.Native.Compiler.Tests.csp
 ### Verification Result
 
 ```
-Passed!  - Failed: 0, Passed: 50, Skipped: 0, Total: 50, Duration: 500 ms - Axiom.Native.Compiler.Tests.dll (net10.0)
+Passed!  - Failed: 0, Passed: 73, Skipped: 0, Total: 73, Duration: 1 s - Axiom.Native.Compiler.Tests.dll (net10.0)
 ```
 
 ---
 
-## 4. Continuous Verification Rules
+## 5. Continuous Verification Rules
 
 According to the project development rules in `AGENTS.md`:
-- Every change to metadata discovery, dependency resolution, or IL analysis must include corresponding positive and negative test cases.
+- Every change to metadata discovery, dependency resolution, IL analysis, or LLVM generation must include corresponding positive and negative test cases.
 - Tests must be executed using `dotnet test` before marking tasks as complete.
 - Test counts and execution results must always be verified and reported accurately.
-

@@ -18,15 +18,15 @@ While .NET offers Native AOT, it compiles entire applications and preserves the 
 2. **Explicit Metadata Attribution**: Compilation roots are explicitly selected by developers using `[NativeCompile]`, avoiding whole-program analysis overhead.
 3. **Decoupled Architecture**:
    - [`Axiom.Native.Abstractions`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Abstractions): Lightweight, zero-dependency contract assembly.
-   - [`Axiom.Native.Compiler`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler): Static analysis, IL inspection, and code generation. Relies on `Mono.Cecil`.
+   - [`Axiom.Native.Compiler`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler): Static analysis, IL inspection, and LLVM IR generation. Relies on `Mono.Cecil`.
    - [`Axiom.Native.Runtime`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Runtime): Isolated runtime execution host. Never references LLVM or the Compiler.
-4. **Deterministic and Actionable Diagnostics**: Every rejection emits a specific diagnostic code (e.g., `AXM1001`–`AXM1007`, `AXM2001`–`AXM2011`) identifying the exact reason, target instruction offset, and member signature.
+4. **Deterministic and Actionable Diagnostics**: Every rejection emits a specific diagnostic code (e.g., `AXM1001`–`AXM1007`, `AXM2001`–`AXM2011`, `AXM3001`–`AXM3008`) identifying the exact reason, target instruction offset, and member signature.
 
 ---
 
 ## 3. End-to-End Pipeline Workflow
 
-The compilation pipeline moves from managed assembly ingestion down to native execution. The diagram below illustrates the complete architectural pipeline, highlighting the **implemented front-end** and the **planned back-end**:
+The compilation pipeline moves from managed assembly ingestion down to native execution. The diagram below illustrates the complete architectural pipeline, highlighting the **implemented front-end & IR generation** and the **planned native back-end**:
 
 ```mermaid
 flowchart TD
@@ -48,16 +48,19 @@ flowchart TD
     subgraph Milestone3["Milestone 3: IL Analysis (Implemented)"]
         CFG["CFG Builder (IlControlFlowGraph)"]
         Sim["Stack Simulation (IlStackType I4/I8)"]
-        Result["MethodAnalysisResult<br/>(Supported / Unsupported / Diagnostics)"]
+        Result["MethodAnalysisResult<br/>(Supported / Diagnostics)"]
     end
 
-    subgraph Milestone4["Milestone 4: LLVM Lowering (Planned)"]
-        LLVMIR["LLVM IR Generation"]
-        LLVMOPT["LLVM Optimization Passes"]
-        OBJ["Native Object / Binary (.dll / .so)"]
+    subgraph Milestone4["Milestone 4: LLVM IR Generation (Implemented)"]
+        LLVMIR["LlvmIrGenerator<br/>(Textual LLVM IR .ll)"]
     end
 
-    subgraph Milestone5["Milestone 5: Runtime & Integration (Planned)"]
+    subgraph Milestone5["Milestone 5: Native Compilation (Planned)"]
+        LLVMOPT["LLVM Optimization & Target Lowering"]
+        OBJ["Native Binary (.dll / .so)"]
+    end
+
+    subgraph Milestone6["Milestone 6: Runtime & Integration (Planned)"]
         Rewrite["Assembly Rewriting / Trampolines"]
         Runtime["NativeRuntime Host / Invoker"]
     end
@@ -70,7 +73,7 @@ flowchart TD
     Graph --> CFG
     CFG --> Sim
     Sim --> Result
-    Result -.->|Valid Methods| LLVMIR
+    Result -->|Valid Methods| LLVMIR
     LLVMIR -.-> LLVMOPT
     LLVMOPT -.-> OBJ
     OBJ -.-> Runtime
@@ -79,8 +82,8 @@ flowchart TD
     classDef implemented fill:#2e7d32,stroke:#1b5e20,color:#fff;
     classDef planned fill:#424242,stroke:#212121,stroke-dasharray: 5 5,color:#fff;
 
-    class NAL,Roots,MDR,Graph,CFG,Sim,Result implemented;
-    class LLVMIR,LLVMOPT,OBJ,Rewrite,Runtime planned;
+    class NAL,Roots,MDR,Graph,CFG,Sim,Result,LLVMIR implemented;
+    class LLVMOPT,OBJ,Rewrite,Runtime planned;
 ```
 
 ---
@@ -93,10 +96,10 @@ flowchart TD
 - **Transitive Dependency Resolution**: Traverse call graphs, detect cycles, deduplicate nodes, validate `call` vs `callvirt`, and identify foreign or BCL terminal boundaries.
 - **Control Flow Graph Construction**: Partition IL instructions into basic blocks delimited by branch instructions and branch targets.
 - **Typed Stack Simulation**: Simulate CLR evaluation stack state using a fixpoint worklist algorithm. Validate stack height convergence, branch targets, and operand type compatibility (`I4` and `I8`).
+- **LLVM IR Generation**: Translate validated CFGs and evaluation stack states into verified textual LLVM IR, featuring entry block local variable `alloca` layout, evaluation stack SSA lowering, `phi` node merge reconciliation, masked shift amounts, and signed/unsigned opcode selection.
 
 ### Planned Subsystems
-- **LLVM IR Generation**: Translating CFG basic blocks and IL opcodes to LLVM IR instructions (`NativeCompiler.cs` is currently an empty placeholder).
-- **Native Binary Compilation**: LLVM execution and object compilation.
+- **Native Binary Compilation**: LLVM execution, target machine codegen, and shared library compilation (`.dll`, `.so`, `.dylib`).
 - **Managed Body Rewriting**: Replacing managed method IL with native entry points or P/Invoke stubs.
 - **Native Runtime Host**: Runtime loading, validation, and invoking of compiled native code (`NativeRuntime.cs` is currently an empty placeholder).
 
@@ -108,5 +111,5 @@ To explore specific subsystems in depth:
 - Read [Architecture & Design](architecture.md) for module decomposition and lifetime rules.
 - Review [Public API](public-api.md) for metadata annotations.
 - Review [IL Analysis Subsystem](compiler/il-analysis.md) for stack typing and opcode support.
+- Review [LLVM IR Generation Subsystem](compiler/llvm-ir-generation.md) for IR lowering details.
 - Review [Diagnostics Reference](diagnostics.md) for compiler error codes.
-

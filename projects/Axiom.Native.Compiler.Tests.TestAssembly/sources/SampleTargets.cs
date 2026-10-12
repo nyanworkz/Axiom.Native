@@ -261,6 +261,70 @@ public static class IlAnalysisPositiveSamples
 
 	[NativeCompile]
 	public static void VoidMethod() { }
+
+	[NativeCompile]
+	public static int DivAndRem(int a, int b, uint c, uint d)
+	{
+		int sDiv = a / b;
+		int sRem = a % b;
+		uint uDiv = c / d;
+		uint uRem = c % d;
+		return sDiv + sRem + (int)(uDiv + uRem);
+	}
+
+	[NativeCompile]
+	public static long BitwiseAndShifts(int a, int b, long c, int shift)
+	{
+		int bitAnd = a & b;
+		int bitOr = a | b;
+		int bitXor = a ^ b;
+		int bitNot = ~a;
+		int shl32 = a << shift;
+		int shr32 = a >> shift;
+		long shl64 = c << shift;
+		long shr64 = c >> shift;
+		return bitAnd + bitOr + bitXor + bitNot + shl32 + shr32 + shl64 + shr64;
+	}
+
+	[NativeCompile]
+	public static long IntegerConversions(int a, long b)
+	{
+		long widenedSigned = (long)a;
+		ulong widenedUnsigned = (ulong)(uint)a;
+		int narrowed = (int)b;
+		return widenedSigned + (long)widenedUnsigned + narrowed;
+	}
+
+	[NativeCompile]
+	public static int IntegerComparisons(int a, int b, uint c, uint d)
+	{
+		bool eq = a == b;
+		bool sgt = a > b;
+		bool slt = a < b;
+		bool ugt = c > d;
+		bool ult = c < d;
+		return (eq ? 1 : 0) + (sgt ? 2 : 0) + (slt ? 4 : 0) + (ugt ? 8 : 0) + (ult ? 16 : 0);
+	}
+
+	[NativeCompile]
+	public static int TernaryCondition(int a, int b)
+	{
+		return a > b ? 10 : 20;
+	}
+
+	[NativeCompile]
+	public static int MultipleReturns(int a)
+	{
+		if (a < 0)
+		{
+			return -1;
+		}
+		if (a == 0)
+		{
+			return 0;
+		}
+		return 1;
+	}
 }
 
 public static class IlAnalysisNegativeSamples

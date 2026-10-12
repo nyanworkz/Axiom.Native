@@ -1,7 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Reflection;
+using System;
 
 namespace Axiom.Native;
 
-public class NativeCompiler { }
+public static class NativeCompiler
+{
+	public static LlvmIrGenerationResult GenerateLlvmIr(MethodAnalysisResult analysisResult)
+	{
+		ArgumentNullException.ThrowIfNull(analysisResult);
+		return LlvmIrGenerator.Generate(analysisResult);
+	}
+}
