@@ -4,4 +4,8 @@
 		<Project Path="projects/Axiom.Native.Compiler/Axiom.Native.Compiler.csproj" />
 		<Project Path="projects/Axiom.Native.Runtime/Axiom.Native.Runtime.csproj" />
 	</Folder>
+	<Folder Name="/tests/">
+		<Project Path="projects/Axiom.Native.Compiler.Tests/Axiom.Native.Compiler.Tests.csproj" />
+		<Project Path="projects/Axiom.Native.Compiler.Tests.TestAssembly/Axiom.Native.Compiler.Tests.TestAssembly.csproj" />
+	</Folder>
 </Solution>

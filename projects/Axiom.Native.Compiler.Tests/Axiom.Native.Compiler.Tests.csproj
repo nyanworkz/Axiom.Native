@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+
+		<AssemblyName>Axiom.Native.Compiler.Tests</AssemblyName>
+		<RootNamespace>Axiom.Native.Compiler.Tests</RootNamespace>
+
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" />
+		<PackageReference Include="xunit" />
+		<PackageReference Include="xunit.runner.visualstudio" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../Axiom.Native.Compiler/Axiom.Native.Compiler.csproj" />
+		<ProjectReference Include="../Axiom.Native.Compiler.Tests.TestAssembly/Axiom.Native.Compiler.Tests.TestAssembly.csproj" />
+	</ItemGroup>
+</Project>
