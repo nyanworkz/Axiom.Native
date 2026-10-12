@@ -1,0 +1,7 @@
+<Solution>
+	<Folder Name="/projects/">
+		<Project Path="projects/Axiom.Native.Abstractions/Axiom.Native.Abstractions.csproj" />
+		<Project Path="projects/Axiom.Native.Compiler/Axiom.Native.Compiler.csproj" />
+		<Project Path="projects/Axiom.Native.Runtime/Axiom.Native.Runtime.csproj" />
+	</Folder>
+</Solution>

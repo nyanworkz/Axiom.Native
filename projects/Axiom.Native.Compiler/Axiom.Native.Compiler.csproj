@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+
+		<AssemblyName>Axiom.Native.Compiler</AssemblyName>
+		<RootNamespace>Axiom.Native</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Mono.Cecil" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../Axiom.Native.Abstractions/Axiom.Native.Abstractions.csproj" />
+	</ItemGroup>
+</Project>

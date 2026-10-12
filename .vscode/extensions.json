@@ -1,0 +1,8 @@
+{
+	"recommendations": [
+		"ms-dotnettools.csdevkit",
+		"csharpier.csharpier-vscode",
+		"editorconfig.editorconfig",
+		"yzhang.markdown-all-in-one"
+	]
+}

@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+
+		<AssemblyName>Axiom.Native.Runtime</AssemblyName>
+		<RootNamespace>Axiom.Native</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../Axiom.Native.Abstractions/Axiom.Native.Abstractions.csproj" />
+	</ItemGroup>
+</Project>
