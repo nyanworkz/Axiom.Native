@@ -10,15 +10,16 @@ public readonly record struct LlvmTypeInfo(
 	bool IsVoid
 )
 {
-	public int Alignment => BitWidth switch
-	{
-		1 => 1,
-		8 => 1,
-		16 => 2,
-		32 => 4,
-		64 => 8,
-		_ => 4
-	};
+	public int Alignment =>
+		BitWidth switch
+		{
+			1 => 1,
+			8 => 1,
+			16 => 2,
+			32 => 4,
+			64 => 8,
+			_ => 4,
+		};
 }
 
 public static class LlvmTypeHelper
@@ -66,11 +67,15 @@ public static class LlvmTypeHelper
 		}
 	}
 
-	public static string ToLlvmStackType(IlStackType stackType) => stackType switch
-	{
-		IlStackType.I4 => "i32",
-		IlStackType.I8 => "i64",
-		_ => throw new ArgumentOutOfRangeException(nameof(stackType), stackType, "Unknown stack type.")
-	};
+	public static string ToLlvmStackType(IlStackType stackType) =>
+		stackType switch
+		{
+			IlStackType.I4 => "i32",
+			IlStackType.I8 => "i64",
+			_ => throw new ArgumentOutOfRangeException(
+				nameof(stackType),
+				stackType,
+				"Unknown stack type."
+			),
+		};
 }
-

@@ -14,12 +14,21 @@ d:\Projects\Axiom\Native\
     │   └── sources/
     │       ├── NativeCompileAttribute.cs     # [NativeCompile] attribute
     │       └── OptimizeFor.cs                # Optimization strategy enum
-    ├── Axiom.Native.Compiler/               # Discovery, dependency resolution, IL analysis, and IR generation
+    ├── Axiom.Native.Compiler/               # Discovery, dependency resolution, IL analysis, and native code emission
     │   └── sources/
     │       ├── Discovery/                    # Milestone 1: Loader and root discovery
     │       ├── Dependencies/                 # Milestone 2: Call graph resolution
     │       ├── Analysis/                     # Milestone 3: IL verification and CFG
-    │       ├── CodeGeneration/               # Milestone 4: LLVM IR generation
+    │       ├── CodeGeneration/               # Milestones 4 & 5: LLVM IR & native object emission
+    │       │   ├── LlvmIrDiagnostic.cs
+    │       │   ├── LlvmIrGenerationResult.cs
+    │       │   ├── LlvmIrGenerator.cs
+    │       │   ├── LlvmToolchain.cs
+    │       │   ├── LlvmTypeHelper.cs
+    │       │   ├── NativeCodeEmitter.cs
+    │       │   ├── NativeEmissionDiagnostic.cs
+    │       │   ├── NativeEmissionOptions.cs
+    │       │   └── NativeEmissionResult.cs
     │       └── NativeCompiler.cs             # Compiler facade
     ├── Axiom.Native.Runtime/                # Native loader and invocation bridge (stub)
     │   └── sources/
@@ -32,7 +41,8 @@ d:\Projects\Axiom\Native\
             ├── NativeAssemblyLoaderTests.cs
             ├── MethodDependencyResolverTests.cs
             ├── MethodIlAnalyzerTests.cs
-            └── LlvmIrGeneratorTests.cs
+            ├── LlvmIrGeneratorTests.cs
+            └── NativeCodeEmitterTests.cs
 ```
 
 ---
@@ -46,22 +56,23 @@ flowchart TD
     UserApp["User Application"] -->|References attributes| Abstractions["Axiom.Native.Abstractions"]
     Compiler["Axiom.Native.Compiler"] -->|Inspects| Abstractions
     Compiler -->|Reads metadata & IL| Cecil["Mono.Cecil (0.11.6)"]
-    Compiler -->|Generates textual IR| LlvmIR["LLVM IR (.ll)"]
-    LlvmIR -.->|Planned compilation| NativeBin["Native Binary (.dll / .so)"]
-    Runtime["Axiom.Native.Runtime"] -.->|Planned load| NativeBin
+    Compiler -->|Lowers CFG| LlvmIR["LLVM IR (.ll)"]
+    Compiler -->|Invokes llc / clang| ObjFile["Native Object File (.obj / .o)"]
+    ObjFile -.->|Planned linking| SharedLib["Shared Library (.dll / .so)"]
+    Runtime["Axiom.Native.Runtime"] -.->|Planned load| SharedLib
 
     classDef comp fill:#1565c0,stroke:#0d47a1,color:#fff;
     classDef dep fill:#455a64,stroke:#263238,color:#fff;
     classDef planned fill:#424242,stroke:#212121,stroke-dasharray: 5 5,color:#fff;
 
     class Abstractions,Compiler comp;
-    class Cecil,UserApp,LlvmIR dep;
-    class NativeBin,Runtime planned;
+    class Cecil,UserApp,LlvmIR,ObjFile dep;
+    class SharedLib,Runtime planned;
 ```
 
 ### Decoupling Rules:
 1. **[`Axiom.Native.Abstractions`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Abstractions)** has **zero dependencies** outside of the .NET BCL. It can be referenced by any managed project without introducing compiler or runtime overhead.
-2. **[`Axiom.Native.Compiler`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler)** depends on `Mono.Cecil` (v0.11.6) for metadata inspection and IL analysis. It does **not** reference the runtime host or external native C# binding assemblies; textual LLVM IR is generated deterministically in pure managed code.
+2. **[`Axiom.Native.Compiler`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler)** depends on `Mono.Cecil` (v0.11.6) for metadata inspection and IL analysis. It does **not** reference the runtime host or external native C# binding assemblies. It compiles LLVM IR to native object files using discovered LLVM toolchain utilities (`clang` or `llc`).
 3. **[`Axiom.Native.Runtime`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Runtime)** must **never depend on LLVM, Mono.Cecil, or Axiom.Native.Compiler**. It is designed as an isolated runtime loader for produced native libraries.
 
 ---
@@ -89,7 +100,7 @@ var roots = NativeAssemblyLoader.DiscoverRoots(context);
 
 ## 4. Processing Pipeline Sequence
 
-The sequence diagram below traces how a target method moves from discovery through IL analysis and LLVM IR generation:
+The sequence diagram below traces how a target method moves from discovery through IL analysis, LLVM IR generation, and native code emission:
 
 ```mermaid
 sequenceDiagram
@@ -101,6 +112,8 @@ sequenceDiagram
     participant Resolver as MethodDependencyResolver
     participant Analyzer as MethodIlAnalyzer
     participant Generator as LlvmIrGenerator
+    participant Emitter as NativeCodeEmitter
+    participant Backend as LLVM Toolchain (llc / clang)
 
     Caller->>Loader: LoadFromPath(path) / LoadFromStream(stream)
     Loader->>Cecil: AssemblyDefinition.ReadAssembly(stream, ReaderParameters)
@@ -125,10 +138,16 @@ sequenceDiagram
 
     Caller->>Generator: Generate(analysisResult)
     Generator->>Generator: Map Parameter & Local Types to LLVM
-    Generator->>Generator: Build Entry Block & Local Allocas
+    Generator->>Generator: Build Entry Block & Local Allocas (InitLocals)
     Generator->>Generator: Lower Basic Blocks & Stack Operations
     Generator->>Generator: Reconcile Merge Points with Phi Nodes
     Generator-->>Caller: LlvmIrGenerationResult (IsSuccess, LlvmIr, Diagnostics)
+
+    Caller->>Emitter: EmitObjectFile(irResult, options)
+    Emitter->>Backend: clang/llc -c input.ll -o target.obj
+    Backend-->>Emitter: Exit code & stdout/stderr
+    Emitter->>Emitter: Verify target.obj exists and is non-empty
+    Emitter-->>Caller: NativeEmissionResult (IsSuccess, ObjectFilePath, Diagnostics)
 ```
 
 ---
@@ -139,4 +158,5 @@ sequenceDiagram
 - For assembly scanning and struct support, see [Discovery Subsystem](compiler/discovery.md).
 - For call graph traversal, see [Dependency Resolution Subsystem](compiler/dependencies.md).
 - For control flow and stack validation, see [IL Analysis Subsystem](compiler/il-analysis.md).
-- For LLVM IR lowering and translation rules, see [LLVM IR Generation Subsystem](compiler/llvm-ir-generation.md).
+- For LLVM IR lowering, see [LLVM IR Generation Subsystem](compiler/llvm-ir-generation.md).
+- For native object file compilation, see [Native Code Emission Subsystem](compiler/native-code-emission.md).

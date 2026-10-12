@@ -8,9 +8,9 @@ This document provides a comprehensive accounting of current constraints, unsupp
 
 Limitations are categorized into four distinct groups:
 1. **Intentionally Unsupported**: Features that violate the zero-overhead native design goals of Axiom.Native.
-2. **Current Milestone Restrictions**: Features temporarily disallowed in IL Analysis and code generation that may be addressed in future milestones.
+2. **Current Milestone Restrictions**: Features temporarily disallowed in IL Analysis, IR generation, and code emission that may be addressed in future milestones.
 3. **Semantic Differences (CLR vs. LLVM)**: Divergence between managed CLR runtime behavior and native LLVM machine execution.
-4. **Pending Downstream Pipeline Stages**: Downstream native compilation and runtime components that are designed but not yet implemented.
+4. **Pending Downstream Pipeline Stages**: Downstream native linking, assembly rewriting, and runtime execution components that are designed but not yet implemented.
 
 ---
 
@@ -25,9 +25,9 @@ Limitations are categorized into four distinct groups:
 
 ---
 
-## 3. Current Milestone Restrictions (IL Subset)
+## 3. Current Milestone Restrictions (IL Subset & Native Emission)
 
-Methods subjected to IL Analysis and LLVM IR Generation must conform to a strict primitive subset:
+Methods subjected to IL Analysis, LLVM IR Generation, and Native Code Emission must conform to a strict primitive subset:
 
 ### Supported Types
 - **Integers**: `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `char`.
@@ -43,15 +43,20 @@ Methods subjected to IL Analysis and LLVM IR Generation must conform to a strict
 - **Argument Mutation (`starg`)**: Mutating method arguments directly via `starg` or `starg.s` is disallowed (`AXM2001`). Use local variables instead.
 - **In-Method Invocations (`call`, `callvirt`)**: Although Milestone 2 analyzes and builds dependency call graphs, Milestone 3 (IL Analysis) rejects direct or virtual calls (`AXM2011`) until call lowered signatures and ABI interop are completed.
 
+### Native Emission Restrictions
+- **Host Platform Only**: Target triple defaults to the current host architecture (`x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`). Arbitrary cross-compilation without appropriate cross-compilation toolchains is not officially validated.
+- **Object Files Only**: The current milestone outputs compiled native object files (`.obj` / `.o`). Linking shared dynamic libraries (`.dll`, `.so`, `.dylib`), symbol export definition files (`.def`), or executable linking is planned for upcoming milestones.
+- **Toolchain Dependency**: Compiling LLVM IR into object files requires an installed LLVM backend toolchain (`clang` or `llc`, and `opt` for verification).
+
 ---
 
 ## 4. Semantic Differences Between CLR and LLVM
 
-When generating LLVM IR from CIL bytecode, semantic differences between the CLR specification (ECMA-335) and LLVM Language Reference require deliberate architectural handling:
+When generating LLVM IR and emitting native machine code from CIL bytecode, semantic differences between the CLR specification (ECMA-335) and native machine behavior require deliberate architectural handling:
 
 ### 1. Division by Zero
 - **CLR Specification**: Integer division by zero (`div`, `div.un`, `rem`, `rem.un`) throws `System.DivideByZeroException`.
-- **LLVM Semantics**: Division by zero in `sdiv`, `udiv`, `srem`, and `urem` is **undefined behavior (UB)** at the hardware level. In native code, integer division by zero triggers a hardware trap (e.g., `SIGFPE` / integer division exception `0xC0000094` on x86/Windows).
+- **LLVM Semantics**: Division by zero in `sdiv`, `udiv`, `srem`, and `urem` is **undefined behavior (UB)** at the LLVM level. In native code, integer division by zero triggers a hardware trap (e.g., `SIGFPE` / integer division exception `0xC0000094` on x86/Windows).
 - **Axiom.Native Approach**: Axiom.Native does not synthesize software branch checks before every division in performance kernels. Callers must ensure divisors are non-zero.
 
 ### 2. Signed Integer Overflow
@@ -68,21 +73,22 @@ When generating LLVM IR from CIL bytecode, semantic differences between the CLR 
 - **LLVM Semantics**: If the shift amount in `shl`, `ashr`, or `lshr` is greater than or equal to the integer bit width, the result is poison.
 - **Axiom.Native Handling**: To guarantee 100% semantic fidelity with the CLR, `LlvmIrGenerator` **explicitly masks shift counts** with `and i32 %shift, 31` (for `i32`) and `and i64 %shift, 63` (for `i64`) before invoking shift instructions.
 
-### 5. Conversions & Narrowing
-- Narrowing conversions (`conv.i4` from `i64`) discard high-order bits via LLVM `trunc`.
-- Widening conversions preserve signedness: `conv.i8` emits `sext` (sign-extension), whereas `conv.u8` emits `zext` (zero-extension).
+### 5. Local Variable Initialization (`InitLocals`)
+- When `MethodBody.InitLocals` is `true` (standard C# default), `alloca` memory locations are explicitly initialized with `store <type> 0`.
+- When `MethodBody.InitLocals` is `false` (e.g. `[SkipLocalsInit]`), locals are left uninitialized to preserve native memory efficiency.
 
 ---
 
 ## 5. Pipeline Implementation Status
 
 ```
-[Discovery]          --> IMPLEMENTED (Milestone 1)
-[Dependencies]       --> IMPLEMENTED (Milestone 2)
-[IL Analysis]        --> IMPLEMENTED (Milestone 3)
-[LLVM IR Generation] --> IMPLEMENTED (Milestone 4)
-[Native Compilation] --> PLANNED (Milestone 5: Shared library generation via LLVM)
-[Assembly Rewriting] --> PLANNED (Milestone 6: Replacing managed bodies with native dispatch)
-[Native Runtime]     --> PLANNED (Milestone 7: NativeRuntime host & dynamic loader)
-[MSBuild / CLI]      --> PLANNED (Milestone 8: Build integration)
+[Discovery]             --> IMPLEMENTED (Milestone 1)
+[Dependencies]          --> IMPLEMENTED (Milestone 2)
+[IL Analysis]           --> IMPLEMENTED (Milestone 3)
+[LLVM IR Generation]    --> IMPLEMENTED (Milestone 4)
+[Native Code Emission]  --> IMPLEMENTED (Milestone 5: Host object file emission via llc / clang)
+[Shared Library Link]   --> PLANNED (Milestone 6: Linking .dll / .so shared objects)
+[Assembly Rewriting]    --> PLANNED (Milestone 7: Replacing managed bodies with native dispatch)
+[Native Runtime]        --> PLANNED (Milestone 8: NativeRuntime host & dynamic loader)
+[MSBuild / CLI]         --> PLANNED (Milestone 9: Build integration)
 ```

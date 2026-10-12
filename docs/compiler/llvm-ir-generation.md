@@ -84,7 +84,7 @@ LLVM integer types do not carry signedness in their type identifiers (`i1`, `i8`
 ### A. Dedicated Function Entry & Local Variables
 In LLVM IR, the function entry block cannot have predecessors and cannot contain `phi` nodes. Axiom.Native emits a dedicated `entry:` prologue block:
 1. Allocates stack slots for all declared method local variables using `alloca` with appropriate type alignment.
-2. Zero-initializes each local variable (`store <type> 0, ptr %loc_i, align <align>`).
+2. **Respects `MethodBody.InitLocals`**: If `method.Body.InitLocals == true`, emits `store <type> 0, ptr %loc_i, align <align>` to zero-initialize the local variable. If `InitLocals == false` (e.g. methods annotated with `[SkipLocalsInit]`), locals are left uninitialized to preserve CIL semantics.
 3. Emits an unconditional branch `br label %block_0` to the CFG's first basic block.
 
 This canonical `entry` layout guarantees that:
@@ -107,13 +107,17 @@ When control flow converges at a basic block $B$ where `B.EntryStack.Count > 0`:
 2. The operands for the `phi` node are gathered directly from the exit stacks of each reachable predecessor block.
 3. The resulting `%phi_B_k` register is pushed onto $B$'s working stack before block instructions are lowered.
 
-### D. Terminator Enforcement
+### D. Terminator Enforcement & Branch Edge Deduplication
 In CIL, basic blocks may end with instructions that fall through sequentially into the next block. In contrast, LLVM IR strictly requires that **every basic block end with a terminator instruction** (`ret`, `br`, or conditional `br`).
 
-If an analyzed basic block does not end with an explicit branch or return, [`LlvmIrGenerator`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler/sources/CodeGeneration/LlvmIrGenerator.cs) automatically synthesizes an unconditional jump to the sequential fallthrough block:
-```llvm
-br label %block_{nextBlock.Index}
-```
+- **Sequential Fallthrough**: If an analyzed basic block does not end with an explicit branch or return, [`LlvmIrGenerator`](file:///d:/Projects/Axiom/Native/projects/Axiom.Native.Compiler/sources/CodeGeneration/LlvmIrGenerator.cs) automatically synthesizes an unconditional jump to the sequential fallthrough block:
+  ```llvm
+  br label %block_{nextBlock.Index}
+  ```
+- **Same-Target Conditional Branch Optimization**: If an IL conditional branch has identical true-target and false-target (fallthrough) basic blocks, the emitter simplifies the terminator into an unconditional jump `br label %block_{target.Index}`. This prevents duplicating control-flow edges to the same successor, which would violate LLVM `phi` node edge multiplicity rules.
+
+### E. Downstream Hand-off
+Verified LLVM IR produced by `LlvmIrGenerator` is handed directly to [Native Code Emission](native-code-emission.md) for compilation into host machine object files (`.obj` / `.o`).
 
 ---
 

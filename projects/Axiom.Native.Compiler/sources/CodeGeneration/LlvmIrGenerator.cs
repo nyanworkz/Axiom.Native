@@ -25,7 +25,9 @@ public static class LlvmIrGenerator
 					"AXM3001",
 					DiagnosticSeverity.Error,
 					$"Cannot generate LLVM IR: method analysis is not supported or contains errors ({analysisResult.SupportStatus}).",
-					analysisResult.Method?.FullName ?? analysisResult.Reference?.FullName ?? "Unknown"
+					analysisResult.Method?.FullName
+						?? analysisResult.Reference?.FullName
+						?? "Unknown"
 				)
 			);
 			return new LlvmIrGenerationResult(analysisResult.Method, null, diagnostics);
@@ -163,7 +165,9 @@ public static class LlvmIrGenerator
 		}
 
 		var functionName = method.FullName;
-		sb.Append($"define {returnTypeInfo.LlvmName} @\"{functionName}\"({string.Join(", ", paramList)}) ");
+		sb.Append(
+			$"define {returnTypeInfo.LlvmName} @\"{functionName}\"({string.Join(", ", paramList)}) "
+		);
 		sb.AppendLine("{");
 
 		// Entry Block: Allocate local variables and branch to block_0
@@ -174,7 +178,12 @@ public static class LlvmIrGenerator
 			{
 				var info = localInfos[i];
 				sb.AppendLine($"  %loc_{i} = alloca {info.LlvmName}, align {info.Alignment}");
-				sb.AppendLine($"  store {info.LlvmName} 0, ptr %loc_{i}, align {info.Alignment}");
+				if (method.Body.InitLocals)
+				{
+					sb.AppendLine(
+						$"  store {info.LlvmName} 0, ptr %loc_{i}, align {info.Alignment}"
+					);
+				}
 			}
 		}
 		sb.AppendLine($"  br label %block_{cfg.EntryBlock!.Index}");
@@ -255,12 +264,16 @@ public static class LlvmIrGenerator
 				if (IsLdcI4(op))
 				{
 					var val = GetLdcI4Value(instr);
-					currentStack.Add(new LlvmOperand("i32", val.ToString(CultureInfo.InvariantCulture)));
+					currentStack.Add(
+						new LlvmOperand("i32", val.ToString(CultureInfo.InvariantCulture))
+					);
 				}
 				else if (op == OpCodes.Ldc_I8)
 				{
 					var val = (long)instr.Operand;
-					currentStack.Add(new LlvmOperand("i64", val.ToString(CultureInfo.InvariantCulture)));
+					currentStack.Add(
+						new LlvmOperand("i64", val.ToString(CultureInfo.InvariantCulture))
+					);
 				}
 				// --- Argument load ---
 				else if (IsLdarg(op))
@@ -307,7 +320,9 @@ public static class LlvmIrGenerator
 					var locIndex = GetLocalIndex(instr);
 					var localInfo = localInfos[locIndex];
 					var loadVar = NextTemp();
-					sb.AppendLine($"  {loadVar} = load {localInfo.LlvmName}, ptr %loc_{locIndex}, align {localInfo.Alignment}");
+					sb.AppendLine(
+						$"  {loadVar} = load {localInfo.LlvmName}, ptr %loc_{locIndex}, align {localInfo.Alignment}"
+					);
 
 					if (localInfo.BitWidth == 32)
 					{
@@ -321,7 +336,9 @@ public static class LlvmIrGenerator
 					{
 						var extVar = NextTemp();
 						var extOp = localInfo.IsSigned ? "sext" : "zext";
-						sb.AppendLine($"  {extVar} = {extOp} {localInfo.LlvmName} {loadVar} to i32");
+						sb.AppendLine(
+							$"  {extVar} = {extOp} {localInfo.LlvmName} {loadVar} to i32"
+						);
 						currentStack.Add(new LlvmOperand("i32", extVar));
 					}
 				}
@@ -330,7 +347,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count == 0)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at stloc.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								"Stack underflow at stloc.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 
@@ -341,12 +367,18 @@ public static class LlvmIrGenerator
 					if (localInfo.BitWidth < 32)
 					{
 						var truncVar = NextTemp();
-						sb.AppendLine($"  {truncVar} = trunc i32 {valOp.Value} to {localInfo.LlvmName}");
-						sb.AppendLine($"  store {localInfo.LlvmName} {truncVar}, ptr %loc_{locIndex}, align {localInfo.Alignment}");
+						sb.AppendLine(
+							$"  {truncVar} = trunc i32 {valOp.Value} to {localInfo.LlvmName}"
+						);
+						sb.AppendLine(
+							$"  store {localInfo.LlvmName} {truncVar}, ptr %loc_{locIndex}, align {localInfo.Alignment}"
+						);
 					}
 					else
 					{
-						sb.AppendLine($"  store {localInfo.LlvmName} {valOp.Value}, ptr %loc_{locIndex}, align {localInfo.Alignment}");
+						sb.AppendLine(
+							$"  store {localInfo.LlvmName} {valOp.Value}, ptr %loc_{locIndex}, align {localInfo.Alignment}"
+						);
 					}
 				}
 				// --- Stack operations ---
@@ -354,7 +386,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count == 0)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at dup.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								"Stack underflow at dup.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var top = currentStack[^1];
@@ -364,7 +405,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count == 0)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at pop.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								"Stack underflow at pop.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					Pop(currentStack);
@@ -374,7 +424,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 2)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, $"Stack underflow at {op.Name}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								$"Stack underflow at {op.Name}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 
@@ -390,7 +449,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 1)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at neg.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								"Stack underflow at neg.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var val = Pop(currentStack);
@@ -402,7 +470,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 1)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at not.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								"Stack underflow at not.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var val = Pop(currentStack);
@@ -415,14 +492,24 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 2)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, $"Stack underflow at {op.Name}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								$"Stack underflow at {op.Name}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 
 					var shift = Pop(currentStack);
 					var val = Pop(currentStack);
 					var resVar = NextTemp();
-					var shiftInst = op == OpCodes.Shl ? "shl" : (op == OpCodes.Shr ? "ashr" : "lshr");
+					var shiftInst =
+						op == OpCodes.Shl ? "shl" : (op == OpCodes.Shr ? "ashr" : "lshr");
 
 					if (val.Type == "i32")
 					{
@@ -454,7 +541,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 1)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, $"Stack underflow at {op.Name}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								$"Stack underflow at {op.Name}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var val = Pop(currentStack);
@@ -473,7 +569,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 1)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at conv.i8.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								"Stack underflow at conv.i8.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var val = Pop(currentStack);
@@ -492,7 +597,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 1)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at conv.u8.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								"Stack underflow at conv.u8.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var val = Pop(currentStack);
@@ -512,7 +626,16 @@ public static class LlvmIrGenerator
 				{
 					if (currentStack.Count < 2)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, $"Stack underflow at {op.Name}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								$"Stack underflow at {op.Name}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var rhs = Pop(currentStack);
@@ -531,18 +654,41 @@ public static class LlvmIrGenerator
 					var targetBlock = ResolveBranchTarget(instr, cfg);
 					if (targetBlock is null)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3006", DiagnosticSeverity.Error, $"Cannot resolve branch target at 0x{instr.Offset:X4}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3006",
+								DiagnosticSeverity.Error,
+								$"Cannot resolve branch target at 0x{instr.Offset:X4}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 
 					sb.AppendLine($"  br label %block_{targetBlock.Index}");
 					blockTerminated = true;
 				}
-				else if (op == OpCodes.Brtrue || op == OpCodes.Brtrue_S || op == OpCodes.Brfalse || op == OpCodes.Brfalse_S)
+				else if (
+					op == OpCodes.Brtrue
+					|| op == OpCodes.Brtrue_S
+					|| op == OpCodes.Brfalse
+					|| op == OpCodes.Brfalse_S
+				)
 				{
 					if (currentStack.Count < 1)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, $"Stack underflow at {op.Name}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								$"Stack underflow at {op.Name}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 					var condVal = Pop(currentStack);
@@ -551,21 +697,48 @@ public static class LlvmIrGenerator
 
 					if (targetBlock is null || fallthroughBlock is null)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3006", DiagnosticSeverity.Error, $"Cannot resolve branch targets at 0x{instr.Offset:X4}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3006",
+								DiagnosticSeverity.Error,
+								$"Cannot resolve branch targets at 0x{instr.Offset:X4}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 
 					var cmpVar = NextTemp();
 					var cmpPred = (op == OpCodes.Brtrue || op == OpCodes.Brtrue_S) ? "ne" : "eq";
 					sb.AppendLine($"  {cmpVar} = icmp {cmpPred} {condVal.Type} {condVal.Value}, 0");
-					sb.AppendLine($"  br i1 {cmpVar}, label %block_{targetBlock.Index}, label %block_{fallthroughBlock.Index}");
+					if (targetBlock.Index == fallthroughBlock.Index)
+					{
+						sb.AppendLine($"  br label %block_{targetBlock.Index}");
+					}
+					else
+					{
+						sb.AppendLine(
+							$"  br i1 {cmpVar}, label %block_{targetBlock.Index}, label %block_{fallthroughBlock.Index}"
+						);
+					}
 					blockTerminated = true;
 				}
 				else if (IsBinaryConditionalBranch(op))
 				{
 					if (currentStack.Count < 2)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, $"Stack underflow at {op.Name}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3005",
+								DiagnosticSeverity.Error,
+								$"Stack underflow at {op.Name}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 
@@ -576,14 +749,32 @@ public static class LlvmIrGenerator
 
 					if (targetBlock is null || fallthroughBlock is null)
 					{
-						diagnostics.Add(new LlvmIrDiagnostic("AXM3006", DiagnosticSeverity.Error, $"Cannot resolve branch targets at 0x{instr.Offset:X4}.", method.FullName, instr.Offset, block.Index));
+						diagnostics.Add(
+							new LlvmIrDiagnostic(
+								"AXM3006",
+								DiagnosticSeverity.Error,
+								$"Cannot resolve branch targets at 0x{instr.Offset:X4}.",
+								method.FullName,
+								instr.Offset,
+								block.Index
+							)
+						);
 						return new LlvmIrGenerationResult(method, null, diagnostics);
 					}
 
 					var pred = GetBinaryBranchPredicate(op);
 					var cmpVar = NextTemp();
 					sb.AppendLine($"  {cmpVar} = icmp {pred} {lhs.Type} {lhs.Value}, {rhs.Value}");
-					sb.AppendLine($"  br i1 {cmpVar}, label %block_{targetBlock.Index}, label %block_{fallthroughBlock.Index}");
+					if (targetBlock.Index == fallthroughBlock.Index)
+					{
+						sb.AppendLine($"  br label %block_{targetBlock.Index}");
+					}
+					else
+					{
+						sb.AppendLine(
+							$"  br i1 {cmpVar}, label %block_{targetBlock.Index}, label %block_{fallthroughBlock.Index}"
+						);
+					}
 					blockTerminated = true;
 				}
 				// --- Return ---
@@ -597,7 +788,16 @@ public static class LlvmIrGenerator
 					{
 						if (currentStack.Count < 1)
 						{
-							diagnostics.Add(new LlvmIrDiagnostic("AXM3005", DiagnosticSeverity.Error, "Stack underflow at ret.", method.FullName, instr.Offset, block.Index));
+							diagnostics.Add(
+								new LlvmIrDiagnostic(
+									"AXM3005",
+									DiagnosticSeverity.Error,
+									"Stack underflow at ret.",
+									method.FullName,
+									instr.Offset,
+									block.Index
+								)
+							);
 							return new LlvmIrGenerationResult(method, null, diagnostics);
 						}
 
@@ -605,7 +805,9 @@ public static class LlvmIrGenerator
 						if (returnTypeInfo.BitWidth < 32)
 						{
 							var truncVar = NextTemp();
-							sb.AppendLine($"  {truncVar} = trunc i32 {retVal.Value} to {returnTypeInfo.LlvmName}");
+							sb.AppendLine(
+								$"  {truncVar} = trunc i32 {retVal.Value} to {returnTypeInfo.LlvmName}"
+							);
 							sb.AppendLine($"  ret {returnTypeInfo.LlvmName} {truncVar}");
 						}
 						else
@@ -680,7 +882,10 @@ public static class LlvmIrGenerator
 		return null;
 	}
 
-	private static IlBasicBlock? ResolveFallthroughBlock(IlBasicBlock currentBlock, IlControlFlowGraph cfg)
+	private static IlBasicBlock? ResolveFallthroughBlock(
+		IlBasicBlock currentBlock,
+		IlControlFlowGraph cfg
+	)
 	{
 		for (var i = 0; i < cfg.Blocks.Count; i++)
 		{
@@ -709,19 +914,32 @@ public static class LlvmIrGenerator
 	private static int GetLdcI4Value(Instruction instr)
 	{
 		var op = instr.OpCode;
-		if (op == OpCodes.Ldc_I4_M1) return -1;
-		if (op == OpCodes.Ldc_I4_0) return 0;
-		if (op == OpCodes.Ldc_I4_1) return 1;
-		if (op == OpCodes.Ldc_I4_2) return 2;
-		if (op == OpCodes.Ldc_I4_3) return 3;
-		if (op == OpCodes.Ldc_I4_4) return 4;
-		if (op == OpCodes.Ldc_I4_5) return 5;
-		if (op == OpCodes.Ldc_I4_6) return 6;
-		if (op == OpCodes.Ldc_I4_7) return 7;
-		if (op == OpCodes.Ldc_I4_8) return 8;
-		if (instr.Operand is sbyte sb) return sb;
-		if (instr.Operand is byte b) return b;
-		if (instr.Operand is int i) return i;
+		if (op == OpCodes.Ldc_I4_M1)
+			return -1;
+		if (op == OpCodes.Ldc_I4_0)
+			return 0;
+		if (op == OpCodes.Ldc_I4_1)
+			return 1;
+		if (op == OpCodes.Ldc_I4_2)
+			return 2;
+		if (op == OpCodes.Ldc_I4_3)
+			return 3;
+		if (op == OpCodes.Ldc_I4_4)
+			return 4;
+		if (op == OpCodes.Ldc_I4_5)
+			return 5;
+		if (op == OpCodes.Ldc_I4_6)
+			return 6;
+		if (op == OpCodes.Ldc_I4_7)
+			return 7;
+		if (op == OpCodes.Ldc_I4_8)
+			return 8;
+		if (instr.Operand is sbyte sb)
+			return sb;
+		if (instr.Operand is byte b)
+			return b;
+		if (instr.Operand is int i)
+			return i;
 		return Convert.ToInt32(instr.Operand, CultureInfo.InvariantCulture);
 	}
 
@@ -736,19 +954,26 @@ public static class LlvmIrGenerator
 	private static int GetIlArgIndex(Instruction instr, MethodDefinition method)
 	{
 		var op = instr.OpCode;
-		if (op == OpCodes.Ldarg_0) return 0;
-		if (op == OpCodes.Ldarg_1) return 1;
-		if (op == OpCodes.Ldarg_2) return 2;
-		if (op == OpCodes.Ldarg_3) return 3;
+		if (op == OpCodes.Ldarg_0)
+			return 0;
+		if (op == OpCodes.Ldarg_1)
+			return 1;
+		if (op == OpCodes.Ldarg_2)
+			return 2;
+		if (op == OpCodes.Ldarg_3)
+			return 3;
 
 		var hasThis = method.HasThis && !method.IsStatic;
 		if (instr.Operand is ParameterDefinition param)
 		{
 			return hasThis ? param.Index + 1 : param.Index;
 		}
-		if (instr.Operand is int intIdx) return intIdx;
-		if (instr.Operand is byte byteIdx) return byteIdx;
-		if (instr.Operand is sbyte sbyteIdx) return sbyteIdx;
+		if (instr.Operand is int intIdx)
+			return intIdx;
+		if (instr.Operand is byte byteIdx)
+			return byteIdx;
+		if (instr.Operand is sbyte sbyteIdx)
+			return sbyteIdx;
 
 		return -1;
 	}
@@ -772,18 +997,25 @@ public static class LlvmIrGenerator
 	private static int GetLocalIndex(Instruction instr)
 	{
 		var op = instr.OpCode;
-		if (op == OpCodes.Ldloc_0 || op == OpCodes.Stloc_0) return 0;
-		if (op == OpCodes.Ldloc_1 || op == OpCodes.Stloc_1) return 1;
-		if (op == OpCodes.Ldloc_2 || op == OpCodes.Stloc_2) return 2;
-		if (op == OpCodes.Ldloc_3 || op == OpCodes.Stloc_3) return 3;
+		if (op == OpCodes.Ldloc_0 || op == OpCodes.Stloc_0)
+			return 0;
+		if (op == OpCodes.Ldloc_1 || op == OpCodes.Stloc_1)
+			return 1;
+		if (op == OpCodes.Ldloc_2 || op == OpCodes.Stloc_2)
+			return 2;
+		if (op == OpCodes.Ldloc_3 || op == OpCodes.Stloc_3)
+			return 3;
 
 		if (instr.Operand is VariableDefinition variable)
 		{
 			return variable.Index;
 		}
-		if (instr.Operand is int intIdx) return intIdx;
-		if (instr.Operand is byte byteIdx) return byteIdx;
-		if (instr.Operand is sbyte sbyteIdx) return sbyteIdx;
+		if (instr.Operand is int intIdx)
+			return intIdx;
+		if (instr.Operand is byte byteIdx)
+			return byteIdx;
+		if (instr.Operand is sbyte sbyteIdx)
+			return sbyteIdx;
 
 		return -1;
 	}
@@ -802,16 +1034,26 @@ public static class LlvmIrGenerator
 
 	private static string GetBinaryArithmeticOp(OpCode op)
 	{
-		if (op == OpCodes.Add) return "add";
-		if (op == OpCodes.Sub) return "sub";
-		if (op == OpCodes.Mul) return "mul";
-		if (op == OpCodes.Div) return "sdiv";
-		if (op == OpCodes.Div_Un) return "udiv";
-		if (op == OpCodes.Rem) return "srem";
-		if (op == OpCodes.Rem_Un) return "urem";
-		if (op == OpCodes.And) return "and";
-		if (op == OpCodes.Or) return "or";
-		if (op == OpCodes.Xor) return "xor";
+		if (op == OpCodes.Add)
+			return "add";
+		if (op == OpCodes.Sub)
+			return "sub";
+		if (op == OpCodes.Mul)
+			return "mul";
+		if (op == OpCodes.Div)
+			return "sdiv";
+		if (op == OpCodes.Div_Un)
+			return "udiv";
+		if (op == OpCodes.Rem)
+			return "srem";
+		if (op == OpCodes.Rem_Un)
+			return "urem";
+		if (op == OpCodes.And)
+			return "and";
+		if (op == OpCodes.Or)
+			return "or";
+		if (op == OpCodes.Xor)
+			return "xor";
 		throw new ArgumentOutOfRangeException(nameof(op), op, "Unexpected binary opcode.");
 	}
 
@@ -824,39 +1066,67 @@ public static class LlvmIrGenerator
 
 	private static string GetComparisonPredicate(OpCode op)
 	{
-		if (op == OpCodes.Ceq) return "eq";
-		if (op == OpCodes.Cgt) return "sgt";
-		if (op == OpCodes.Cgt_Un) return "ugt";
-		if (op == OpCodes.Clt) return "slt";
-		if (op == OpCodes.Clt_Un) return "ult";
+		if (op == OpCodes.Ceq)
+			return "eq";
+		if (op == OpCodes.Cgt)
+			return "sgt";
+		if (op == OpCodes.Cgt_Un)
+			return "ugt";
+		if (op == OpCodes.Clt)
+			return "slt";
+		if (op == OpCodes.Clt_Un)
+			return "ult";
 		throw new ArgumentOutOfRangeException(nameof(op), op, "Unexpected comparison opcode.");
 	}
 
 	private static bool IsBinaryConditionalBranch(OpCode op) =>
-		op == OpCodes.Beq || op == OpCodes.Beq_S
-		|| op == OpCodes.Bne_Un || op == OpCodes.Bne_Un_S
-		|| op == OpCodes.Bge || op == OpCodes.Bge_S
-		|| op == OpCodes.Bge_Un || op == OpCodes.Bge_Un_S
-		|| op == OpCodes.Bgt || op == OpCodes.Bgt_S
-		|| op == OpCodes.Bgt_Un || op == OpCodes.Bgt_Un_S
-		|| op == OpCodes.Ble || op == OpCodes.Ble_S
-		|| op == OpCodes.Ble_Un || op == OpCodes.Ble_Un_S
-		|| op == OpCodes.Blt || op == OpCodes.Blt_S
-		|| op == OpCodes.Blt_Un || op == OpCodes.Blt_Un_S;
+		op == OpCodes.Beq
+		|| op == OpCodes.Beq_S
+		|| op == OpCodes.Bne_Un
+		|| op == OpCodes.Bne_Un_S
+		|| op == OpCodes.Bge
+		|| op == OpCodes.Bge_S
+		|| op == OpCodes.Bge_Un
+		|| op == OpCodes.Bge_Un_S
+		|| op == OpCodes.Bgt
+		|| op == OpCodes.Bgt_S
+		|| op == OpCodes.Bgt_Un
+		|| op == OpCodes.Bgt_Un_S
+		|| op == OpCodes.Ble
+		|| op == OpCodes.Ble_S
+		|| op == OpCodes.Ble_Un
+		|| op == OpCodes.Ble_Un_S
+		|| op == OpCodes.Blt
+		|| op == OpCodes.Blt_S
+		|| op == OpCodes.Blt_Un
+		|| op == OpCodes.Blt_Un_S;
 
 	private static string GetBinaryBranchPredicate(OpCode op)
 	{
-		if (op == OpCodes.Beq || op == OpCodes.Beq_S) return "eq";
-		if (op == OpCodes.Bne_Un || op == OpCodes.Bne_Un_S) return "ne";
-		if (op == OpCodes.Bge || op == OpCodes.Bge_S) return "sge";
-		if (op == OpCodes.Bge_Un || op == OpCodes.Bge_Un_S) return "uge";
-		if (op == OpCodes.Bgt || op == OpCodes.Bgt_S) return "sgt";
-		if (op == OpCodes.Bgt_Un || op == OpCodes.Bgt_Un_S) return "ugt";
-		if (op == OpCodes.Ble || op == OpCodes.Ble_S) return "sle";
-		if (op == OpCodes.Ble_Un || op == OpCodes.Ble_Un_S) return "ule";
-		if (op == OpCodes.Blt || op == OpCodes.Blt_S) return "slt";
-		if (op == OpCodes.Blt_Un || op == OpCodes.Blt_Un_S) return "ult";
-		throw new ArgumentOutOfRangeException(nameof(op), op, "Unexpected conditional branch opcode.");
+		if (op == OpCodes.Beq || op == OpCodes.Beq_S)
+			return "eq";
+		if (op == OpCodes.Bne_Un || op == OpCodes.Bne_Un_S)
+			return "ne";
+		if (op == OpCodes.Bge || op == OpCodes.Bge_S)
+			return "sge";
+		if (op == OpCodes.Bge_Un || op == OpCodes.Bge_Un_S)
+			return "uge";
+		if (op == OpCodes.Bgt || op == OpCodes.Bgt_S)
+			return "sgt";
+		if (op == OpCodes.Bgt_Un || op == OpCodes.Bgt_Un_S)
+			return "ugt";
+		if (op == OpCodes.Ble || op == OpCodes.Ble_S)
+			return "sle";
+		if (op == OpCodes.Ble_Un || op == OpCodes.Ble_Un_S)
+			return "ule";
+		if (op == OpCodes.Blt || op == OpCodes.Blt_S)
+			return "slt";
+		if (op == OpCodes.Blt_Un || op == OpCodes.Blt_Un_S)
+			return "ult";
+		throw new ArgumentOutOfRangeException(
+			nameof(op),
+			op,
+			"Unexpected conditional branch opcode."
+		);
 	}
 }
-

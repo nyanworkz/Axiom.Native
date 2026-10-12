@@ -6,6 +6,7 @@ Diagnostics are partitioned by subsystem:
 - **`AXM1001`–`AXM1007`**: Emitted during Dependency Resolution ([Milestone 2](compiler/dependencies.md)).
 - **`AXM2001`–`AXM2011`**: Emitted during IL Analysis & Stack Simulation ([Milestone 3](compiler/il-analysis.md)).
 - **`AXM3001`–`AXM3008`**: Emitted during LLVM IR Generation ([Milestone 4](compiler/llvm-ir-generation.md)).
+- **`AXM4001`–`AXM4008`**: Emitted during Native Code Emission ([Milestone 5](compiler/native-code-emission.md)).
 
 ---
 
@@ -56,18 +57,39 @@ Diagnostics are partitioned by subsystem:
 
 ---
 
-## 4. Diagnostic Severity and Support Hierarchy
+## 4. Native Code Emission Diagnostics (`AXM4001`–`AXM4008`)
 
-When a method is analyzed, the diagnostics dictate the resulting status:
+| Code | Severity | Description | Typical Cause | Recommended Action |
+|---|:---:|---|---|---|
+| **`AXM4001`** | Error | Input LLVM IR generation result is unsuccessful or empty. | Passing an uncompiled or failed `LlvmIrGenerationResult` to `NativeCodeEmitter`. | Ensure `LlvmIrGenerator.Generate` succeeded without diagnostics. |
+| **`AXM4002`** | Error | LLVM IR verification failed (`opt`). | Generated IR contains malformed instruction syntax, broken type signatures, or invalid phi incoming labels. | Fix IR generation logic to satisfy LLVM structural rules. |
+| **`AXM4003`** | Error | No supported LLVM compiler backend (`clang` or `llc`) found. | Neither `clang` nor `llc` was found in specified custom directory, environment variables, or system `PATH`. | Install LLVM or set `AXIOM_LLVM_PATH` environment variable pointing to the LLVM bin directory. |
+| **`AXM4004`** | Error | Backend compiler process failed with non-zero exit code. | `clang` or `llc` rejected the LLVM IR or target configuration. | Inspect the stderr message included in the diagnostic for compiler syntax or target errors. |
+| **`AXM4005`** | Error | Expected native object file was not created or is empty. | Tool exited 0 but produced no object file or zero-byte file at destination. | Check disk permissions and file access on output path. |
+| **`AXM4006`** | Error | Invalid output path or directory cannot be created. | Specified `OutputPath` has invalid characters, points to read-only directory, or disk is full. | Provide a writable, valid file path for the object file. |
+| **`AXM4007`** | Error | Compiler or verifier process timed out. | Backend tool exceeded configured timeout (`NativeEmissionOptions.TimeoutMs`). | Increase timeout or inspect compiler process for hanging or deadlock. |
+| **`AXM4008`** | Error | Unexpected internal error during native emission. | Unhandled exception occurred while setting up emission process. | Inspect diagnostic message and inner exception details. |
+
+---
+
+## 5. Diagnostic Severity and Support Hierarchy
+
+When a method progresses through the compiler pipeline:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Supported: All checks pass
-    [*] --> Unsupported: Contains unsupported constructs (AXM2001, AXM2002, AXM2003, AXM2011)
-    [*] --> MalformedIl: Violates CIL semantics or stack invariants (AXM2004-AXM2010)
-    Supported --> LlvmIrSuccess: LlvmIrGenerator passes
-    Supported --> LlvmIrError: LlvmIrGenerator emits AXM3001-AXM3008
+    [*] --> DiscoveryPassed: Discovery succeeds
+    DiscoveryPassed --> DependencyResolved: Dependencies resolved
+    DependencyResolved --> IlAnalysisSupported: IL Analysis passes (AXM2001-AXM2011 clean)
+    IlAnalysisSupported --> LlvmIrGenerated: LlvmIrGenerator passes (AXM3001-AXM3008 clean)
+    LlvmIrGenerated --> NativeObjectEmitted: NativeCodeEmitter passes (AXM4001-AXM4008 clean)
+
+    DiscoveryPassed --> DiscoveryError: AXM1001-AXM1007
+    DependencyResolved --> DependencyError: AXM1001-AXM1007
+    IlAnalysisSupported --> AnalysisError: AXM2001-AXM2011
+    LlvmIrGenerated --> GenerationError: AXM3001-AXM3008
+    NativeObjectEmitted --> EmissionError: AXM4001-AXM4008
 ```
 
-- **`AXM3001`–`AXM3008`** prevent LLVM IR output (`LlvmIrGenerationResult.IsSuccess == false`, `LlvmIr == null`).
-- Generation is deterministic and non-throwing; all expected failures produce structured diagnostic objects.
+- Each stage reports structured, actionable diagnostics.
+- Compilation is deterministic, never falls back silently, and never reports success until all verification and physical file checks pass.

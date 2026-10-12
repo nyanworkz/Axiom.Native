@@ -55,9 +55,9 @@ flowchart TD
         LLVMIR["LlvmIrGenerator<br/>(Textual LLVM IR .ll)"]
     end
 
-    subgraph Milestone5["Milestone 5: Native Compilation (Planned)"]
-        LLVMOPT["LLVM Optimization & Target Lowering"]
-        OBJ["Native Binary (.dll / .so)"]
+    subgraph Milestone5["Milestone 5: Native Code Emission (Implemented)"]
+        LLVMOPT["LLVM IR Verification (opt)"]
+        OBJ["Native Object File (.obj / .o)<br/>(clang / llc)"]
     end
 
     subgraph Milestone6["Milestone 6: Runtime & Integration (Planned)"]
@@ -74,16 +74,16 @@ flowchart TD
     CFG --> Sim
     Sim --> Result
     Result -->|Valid Methods| LLVMIR
-    LLVMIR -.-> LLVMOPT
-    LLVMOPT -.-> OBJ
+    LLVMIR --> LLVMOPT
+    LLVMOPT --> OBJ
     OBJ -.-> Runtime
     Result -.-> Rewrite
 
     classDef implemented fill:#2e7d32,stroke:#1b5e20,color:#fff;
     classDef planned fill:#424242,stroke:#212121,stroke-dasharray: 5 5,color:#fff;
 
-    class NAL,Roots,MDR,Graph,CFG,Sim,Result,LLVMIR implemented;
-    class LLVMOPT,OBJ,Rewrite,Runtime planned;
+    class NAL,Roots,MDR,Graph,CFG,Sim,Result,LLVMIR,LLVMOPT,OBJ implemented;
+    class Rewrite,Runtime planned;
 ```
 
 ---
@@ -97,9 +97,10 @@ flowchart TD
 - **Control Flow Graph Construction**: Partition IL instructions into basic blocks delimited by branch instructions and branch targets.
 - **Typed Stack Simulation**: Simulate CLR evaluation stack state using a fixpoint worklist algorithm. Validate stack height convergence, branch targets, and operand type compatibility (`I4` and `I8`).
 - **LLVM IR Generation**: Translate validated CFGs and evaluation stack states into verified textual LLVM IR, featuring entry block local variable `alloca` layout, evaluation stack SSA lowering, `phi` node merge reconciliation, masked shift amounts, and signed/unsigned opcode selection.
+- **Native Code Emission**: Compile verified LLVM IR into host native object files (`.obj` on Windows COFF, `.o` on Linux/macOS) using discovered `clang` or `llc`, pre-verified with `opt`, target triple detection, deterministic optimization level mapping, timeout guards, and comprehensive diagnostics (`AXM4001`–`AXM4008`).
 
 ### Planned Subsystems
-- **Native Binary Compilation**: LLVM execution, target machine codegen, and shared library compilation (`.dll`, `.so`, `.dylib`).
+- **Dynamic Shared Library Linking**: Linking `.obj` / `.o` artifacts into shared libraries (`.dll`, `.so`, `.dylib`) for runtime dynamic invocation.
 - **Managed Body Rewriting**: Replacing managed method IL with native entry points or P/Invoke stubs.
 - **Native Runtime Host**: Runtime loading, validation, and invoking of compiled native code (`NativeRuntime.cs` is currently an empty placeholder).
 
@@ -112,4 +113,5 @@ To explore specific subsystems in depth:
 - Review [Public API](public-api.md) for metadata annotations.
 - Review [IL Analysis Subsystem](compiler/il-analysis.md) for stack typing and opcode support.
 - Review [LLVM IR Generation Subsystem](compiler/llvm-ir-generation.md) for IR lowering details.
+- Review [Native Code Emission Subsystem](compiler/native-code-emission.md) for toolchain discovery and native object compilation.
 - Review [Diagnostics Reference](diagnostics.md) for compiler error codes.

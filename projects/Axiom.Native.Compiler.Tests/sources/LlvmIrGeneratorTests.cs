@@ -38,41 +38,7 @@ public class LlvmIrGeneratorTests
 
 	private static string? FindOptBinary()
 	{
-		var paths = new[]
-		{
-			@"D:\Tools\LLVM\bin\opt.exe",
-			"opt.exe",
-			"opt"
-		};
-
-		foreach (var candidate in paths)
-		{
-			try
-			{
-				var psi = new ProcessStartInfo(candidate, "--version")
-				{
-					RedirectStandardOutput = true,
-					RedirectStandardError = true,
-					UseShellExecute = false,
-					CreateNoWindow = true
-				};
-				using var proc = Process.Start(psi);
-				if (proc != null)
-				{
-					proc.WaitForExit(3000);
-					if (proc.ExitCode == 0)
-					{
-						return candidate;
-					}
-				}
-			}
-			catch
-			{
-				// Ignore and try next
-			}
-		}
-
-		return null;
+		return LlvmToolchain.FindTool("opt");
 	}
 
 	private static void AssertValidWithLlvmOptIfAvailable(string llvmIr)
@@ -93,7 +59,7 @@ public class LlvmIrGeneratorTests
 				RedirectStandardOutput = true,
 				RedirectStandardError = true,
 				UseShellExecute = false,
-				CreateNoWindow = true
+				CreateNoWindow = true,
 			};
 
 			using var proc = Process.Start(psi);
@@ -136,7 +102,10 @@ public class LlvmIrGeneratorTests
 				Assert.Empty(result.Diagnostics);
 				Assert.NotNull(result.LlvmIr);
 
-				Assert.Contains("define i32 @\"System.Int32 Axiom.Native.Compiler.Tests.TestAssembly.IlAnalysisPositiveSamples::ReturnConstant()\"()", result.LlvmIr);
+				Assert.Contains(
+					"define i32 @\"System.Int32 Axiom.Native.Compiler.Tests.TestAssembly.IlAnalysisPositiveSamples::ReturnConstant()\"()",
+					result.LlvmIr
+				);
 				Assert.Contains("ret i32 42", result.LlvmIr);
 
 				AssertValidWithLlvmOptIfAvailable(result.LlvmIr);
@@ -489,11 +458,18 @@ public class LlvmIrGeneratorTests
 			MethodAttributes.Public | MethodAttributes.Static,
 			module.TypeSystem.Int32
 		);
-		method.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32));
+		method.Parameters.Add(
+			new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32)
+		);
 		module.Types.Add(
-			new TypeDefinition("TestNs", "TestType", TypeAttributes.Public, module.TypeSystem.Object)
+			new TypeDefinition(
+				"TestNs",
+				"TestType",
+				TypeAttributes.Public,
+				module.TypeSystem.Object
+			)
 			{
-				Methods = { method }
+				Methods = { method },
 			}
 		);
 
@@ -662,11 +638,18 @@ public class LlvmIrGeneratorTests
 			module.TypeSystem.Int32
 		);
 		// Add an object parameter
-		method.Parameters.Add(new ParameterDefinition("o", ParameterAttributes.None, module.TypeSystem.Object));
+		method.Parameters.Add(
+			new ParameterDefinition("o", ParameterAttributes.None, module.TypeSystem.Object)
+		);
 		module.Types.Add(
-			new TypeDefinition("TestNs", "TestType", TypeAttributes.Public, module.TypeSystem.Object)
+			new TypeDefinition(
+				"TestNs",
+				"TestType",
+				TypeAttributes.Public,
+				module.TypeSystem.Object
+			)
 			{
-				Methods = { method }
+				Methods = { method },
 			}
 		);
 
@@ -689,7 +672,10 @@ public class LlvmIrGeneratorTests
 
 		Assert.False(result.IsSuccess);
 		Assert.Null(result.LlvmIr);
-		Assert.Contains(result.Diagnostics, d => d.Code == "AXM3003" && d.Message.Contains("parameter"));
+		Assert.Contains(
+			result.Diagnostics,
+			d => d.Code == "AXM3003" && d.Message.Contains("parameter")
+		);
 	}
 
 	// ==========================================
@@ -710,9 +696,14 @@ public class LlvmIrGeneratorTests
 			module.TypeSystem.String
 		);
 		module.Types.Add(
-			new TypeDefinition("TestNs", "TestType", TypeAttributes.Public, module.TypeSystem.Object)
+			new TypeDefinition(
+				"TestNs",
+				"TestType",
+				TypeAttributes.Public,
+				module.TypeSystem.Object
+			)
 			{
-				Methods = { method }
+				Methods = { method },
 			}
 		);
 
@@ -734,7 +725,10 @@ public class LlvmIrGeneratorTests
 
 		Assert.False(result.IsSuccess);
 		Assert.Null(result.LlvmIr);
-		Assert.Contains(result.Diagnostics, d => d.Code == "AXM3003" && d.Message.Contains("return type"));
+		Assert.Contains(
+			result.Diagnostics,
+			d => d.Code == "AXM3003" && d.Message.Contains("return type")
+		);
 	}
 
 	// ==========================================
@@ -755,9 +749,14 @@ public class LlvmIrGeneratorTests
 			module.TypeSystem.Void
 		);
 		module.Types.Add(
-			new TypeDefinition("TestNs", "TestType", TypeAttributes.Public, module.TypeSystem.Object)
+			new TypeDefinition(
+				"TestNs",
+				"TestType",
+				TypeAttributes.Public,
+				module.TypeSystem.Object
+			)
 			{
-				Methods = { method }
+				Methods = { method },
 			}
 		);
 
@@ -800,9 +799,14 @@ public class LlvmIrGeneratorTests
 			module.TypeSystem.Int32
 		);
 		module.Types.Add(
-			new TypeDefinition("TestNs", "TestType", TypeAttributes.Public, module.TypeSystem.Object)
+			new TypeDefinition(
+				"TestNs",
+				"TestType",
+				TypeAttributes.Public,
+				module.TypeSystem.Object
+			)
 			{
-				Methods = { method }
+				Methods = { method },
 			}
 		);
 
@@ -856,5 +860,110 @@ public class LlvmIrGeneratorTests
 		Assert.Contains("[AXM3001][Error]", diag1.ToString());
 		Assert.Contains("Block 2", diag1.ToString());
 		Assert.Equal(0, diag1.CompareTo(diag2));
+	}
+
+	// ==========================================
+	// 24. Audit Regression: InitLocals = false
+	// ==========================================
+	[Fact]
+	public void Regression_Audit_01_InitLocalsFalse_DoesNotZeroInitialize()
+	{
+		using var assembly = AssemblyDefinition.CreateAssembly(
+			new AssemblyNameDefinition("NoInitTest", new Version(1, 0)),
+			"NoInitTest.dll",
+			ModuleKind.Dll
+		);
+		var module = assembly.MainModule;
+		var method = new MethodDefinition(
+			"NoInitLocals",
+			MethodAttributes.Public | MethodAttributes.Static,
+			module.TypeSystem.Int32
+		);
+		module.Types.Add(
+			new TypeDefinition(
+				"TestNs",
+				"TestType",
+				TypeAttributes.Public,
+				module.TypeSystem.Object
+			)
+			{
+				Methods = { method },
+			}
+		);
+
+		method.Body.InitLocals = false;
+		method.Body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
+
+		var il = method.Body.Instructions;
+		il.Add(Instruction.Create(OpCodes.Ldc_I4_5));
+		il.Add(Instruction.Create(OpCodes.Stloc_0));
+		il.Add(Instruction.Create(OpCodes.Ldloc_0));
+		il.Add(Instruction.Create(OpCodes.Ret));
+
+		var analysis = MethodIlAnalyzer.Analyze(method);
+		Assert.True(analysis.IsSupported);
+
+		var result = LlvmIrGenerator.Generate(analysis);
+
+		Assert.True(result.IsSuccess);
+		Assert.NotNull(result.LlvmIr);
+
+		// Must have alloca for local 0
+		Assert.Contains("%loc_0 = alloca i32, align 4", result.LlvmIr);
+		// Must NOT have zero store in entry block because InitLocals = false
+		Assert.DoesNotContain("store i32 0, ptr %loc_0", result.LlvmIr);
+
+		AssertValidWithLlvmOptIfAvailable(result.LlvmIr);
+	}
+
+	// ==========================================
+	// 25. Audit Regression: Conditional branch with same target and fallthrough
+	// ==========================================
+	[Fact]
+	public void Regression_Audit_02_ConditionalBranch_SameTargetAndFallthrough_DoesNotDuplicateEdge()
+	{
+		using var assembly = AssemblyDefinition.CreateAssembly(
+			new AssemblyNameDefinition("DupEdgeTest", new Version(1, 0)),
+			"DupEdgeTest.dll",
+			ModuleKind.Dll
+		);
+		var module = assembly.MainModule;
+		var method = new MethodDefinition(
+			"SameTargetBranch",
+			MethodAttributes.Public | MethodAttributes.Static,
+			module.TypeSystem.Int32
+		);
+		method.Parameters.Add(
+			new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32)
+		);
+		module.Types.Add(
+			new TypeDefinition(
+				"TestNs",
+				"TestType",
+				TypeAttributes.Public,
+				module.TypeSystem.Object
+			)
+			{
+				Methods = { method },
+			}
+		);
+
+		var il = method.Body.Instructions;
+		var targetInstr = Instruction.Create(OpCodes.Ldc_I4, 42);
+		il.Add(Instruction.Create(OpCodes.Ldarg_0));
+		il.Add(Instruction.Create(OpCodes.Brtrue, targetInstr)); // target is the immediate next instruction
+		il.Add(targetInstr);
+		il.Add(Instruction.Create(OpCodes.Ret));
+
+		var analysis = MethodIlAnalyzer.Analyze(method);
+		Assert.True(analysis.IsSupported);
+
+		var result = LlvmIrGenerator.Generate(analysis);
+
+		Assert.True(result.IsSuccess);
+		Assert.NotNull(result.LlvmIr);
+
+		// Must not have dual edges to the same block
+		AssertValidWithLlvmOptIfAvailable(result.LlvmIr);
 	}
 }

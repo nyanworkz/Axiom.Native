@@ -2,9 +2,7 @@ using System;
 
 namespace Axiom.Native;
 
-public sealed class LlvmIrDiagnostic
-	: IEquatable<LlvmIrDiagnostic>,
-		IComparable<LlvmIrDiagnostic>
+public sealed class LlvmIrDiagnostic : IEquatable<LlvmIrDiagnostic>, IComparable<LlvmIrDiagnostic>
 {
 	public string Code { get; }
 	public DiagnosticSeverity Severity { get; }
@@ -49,7 +47,13 @@ public sealed class LlvmIrDiagnostic
 
 	public override int GetHashCode()
 	{
-		return HashCode.Combine(Code, (int)Severity, MethodFullName, IlOffset, HashCode.Combine(BlockIndex, Message));
+		return HashCode.Combine(
+			Code,
+			(int)Severity,
+			MethodFullName,
+			IlOffset,
+			HashCode.Combine(BlockIndex, Message)
+		);
 	}
 
 	public int CompareTo(LlvmIrDiagnostic? other)
@@ -96,4 +100,3 @@ public sealed class LlvmIrDiagnostic
 		return $"[{Code}][{Severity}] {loc}: {Message}";
 	}
 }
-
